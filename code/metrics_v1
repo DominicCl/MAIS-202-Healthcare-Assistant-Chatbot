@@ -1,0 +1,110 @@
+## METRICS ##
+
+# Accuracy
+
+def accuracy(df: dict) -> float:
+  
+  TP= 0
+  FP = 0
+  TN = 0
+  FN = 0
+  
+  for i in range(len(df['true'])):
+    if df['true'][i] == df['pred'][i]:
+      if df['true'][i] == 1:
+        TP = TP + 1
+      else:
+        TN = TN + 1
+      else:
+        if df['true'][i] == 1:
+          FN = FN + 1
+        else:
+          FP = FP + 1
+    
+  accuracy = (TP + TN) / ( (TP + FN) + (TN + FP) )
+
+if accuracy >= 0.8:
+  return(accuracy)
+else:
+  return("Accuracy is lower than 80%. The model is not good enough.")
+
+# Precision
+
+def precision(df: dict) -> float:
+  
+  TP= 0
+  FP = 0
+  TN = 0
+  FN = 0
+  
+  for i in range(len(df['true'])):
+    if df['true'][i] == df['pred'][i]:
+      if df['true'][i] == 1:
+        TP = TP + 1
+      else:
+        TN = TN + 1
+      else:
+        if df['true'][i] == 1:
+          FN = FN + 1
+        else:
+          FP = FP + 1
+      
+ precision = TP / (TP + FP)
+
+return(precision)
+
+# Recall
+
+def recall(df: dict) -> float:
+  
+  TP= 0
+  FP = 0
+  TN = 0
+  FN = 0
+  
+  for i in range(len(df['true'])):
+    if df['true'][i] == df['pred'][i]:
+      if df['true'][i] == 1:
+        TP = TP + 1
+      else:
+        TN = TN + 1
+      else:
+        if df['true'][i] == 1:
+          FN = FN + 1
+        else:
+          FP = FP + 1
+
+ recall = TP / (TP + FN)
+
+return(recall)
+
+# F1
+
+def f1(df: dict) -> float:
+  
+  TP= 0
+  FP = 0
+  TN = 0
+  FN = 0
+  
+  for i in range(len(df['true'])):
+    if df['true'][i] == df['pred'][i]:
+      if df['true'][i] == 1:
+        TP = TP + 1
+      else:
+        TN = TN + 1
+      else:
+        if df['true'][i] == 1:
+          FN = FN + 1
+        else:
+          FP = FP + 1
+
+  precision = TP / (TP + FP)
+  recall = TP / (TP + FN)
+    
+  f1 = 2 * precision * recall / (precision + recall)
+
+if accuracy >= 0.7:
+  return(f1)
+else:
+  return("F1 is lower than 70%. The model is not good enough.")
