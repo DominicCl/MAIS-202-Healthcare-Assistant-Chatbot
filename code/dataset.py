@@ -1,66 +1,45 @@
 # This file will handle the csv dataset such that it can be fed into the model
-import pandas as pd
-import torch 
+import torch
 from torch.utils.data import Dataset
-from transformers import AutoTokenizer
+import numpy as np
 
 
 class MultiLabelTextDataset(Dataset):
-  def __init__(self, csv_path, tokenizer_name, label_list, max_length=256):
-    # load the csv file
-    df = pd.read_csv(csv_path)
+  NUM_FEATURES = 10 # matches the INPUT_FEATURES in model.py
+
+  # dataset_csv_path: represents the path to where we can access our dataset
+  # tokenizer_name: placeholder for a tokenizer name
+  # label_list: list of the all the 41 unique diseases/labels
+  # max_length: normally the max tokenized sequence length
+  def __init__(self, dataset_csv_path, tokenizer_name, label_list, max_length):
+    super().__init__()
+    # Use a fixed data size for the synthetic data
+    self.data_size = 10000 # the number of samples (one patient/feature vector)
+    self.num_labels = len(label_list) # the number of lables/diseases
+  
+  def __len__(self):
+    return self.data_size #c number of samples in the dataset
+
+  def __getitem__(self, index): # we generate the features vector (size 10) and the one hot labels vector (size 41) corresponding to the correct disease
+    # ----- GENERATING SAMPLE -----
+    # Determine the index of the correct disease label for this sample which will be evaluated against the guessed label
+    true_label_index = index % self.num_labels # makes each sample correspond to one label index
     
-    # get all the symptoms columns in a list
-    symptom_columns = [col for col in df.columns if col.startswith("Symptom")]
-
-    # fill all empty symptom cells with empty strings and join them with commas
-    df["Symptoms_Combined"] = df[symptom_columns].fillna("").astype(str).agg(lambda x: ', '.join([val for val in x if val]), axis = 1) # axis = 1 means for each column
-
-    # use this newly created column as input for the model
-    self.texts = df["Symptoms_Combined"].tolist()
-
-    # get the label list
-    self.label_list = label_list
-    # create a dictonary to easily map a disease to a number
-    self.label_to_index = {}
-    for i, label in enumerate(label_list): 
-      self.label_to_index[label] = i
-
-    self.labels = [self.encode_labels(s) for s in df["Disease"].fillna("").astype(str).to_list]
-
-    # initialize the tokenizer and the max length
-    self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, use_fast = True)
-    self.max_length = max_length
-
-    def encode_labels(self, label_str):
-      # one hot vector encoding based on the label list
-      # remove any whitespaces
-      label = label_str.strip()
-      #initializing a zero vector 
-      vec = [0]*len(self.label_list)
-      vec[self.label_to_index[label]] = 1
-
-      return vec
-
-    def __len__(self):
-      return len(self.texts)
+    # creates a tensor of 10 float features (input vector), initialized to 0
+    features = torch.zeros(self.NUM_FEATURES, dtype=torch.float)
+    # defining the maximum index of the label_list
+    max_index = self.num_labels - 1 
+    # assigning each feature/row to a specific disease number (the first value fo the feature vector)
+    features[0] = float(true_label_index) / max_index
     
-    def __getitem__(self, index):
-      text = self.texts[index]
-
-      encoded_input = self.tokenizer(
-          text, 
-          truncation=True, 
-          padding="max_length",
-          max_length=self.max_length, 
-          return_tensors="pt" # "pt" -> PyTorch tensors
-      )
-      
-      item = {}
-      for key, tensor in encoded_input.items():
-          item[key] = tensor.squeeze(0)
-      
-      item["labels"] = torch.tensor(self.labels[idx], dtype=torch.float)
-      
-      return item
+    # Fill the rest of the features with random noise
+    features[1:] = 0.01 * torch.randn(self.NUM_FEATURES - 1)
     
+    # Create the labels (one-hot vector for multi-label classification)
+    labels = torch.zeros(self.num_labels, dtype=torch.float)
+    labels[true_label_index] = 1.0 # sets the correct disease label to 1.0
+
+    return {
+      'features': features, 
+      'labels': labels
+    }
