@@ -1,45 +1,63 @@
-# This file will handle the csv dataset such that it can be fed into the model
 import torch
 from torch.utils.data import Dataset
-import numpy as np
-
+import pandas as pd
 
 class MultiLabelTextDataset(Dataset):
-  NUM_FEATURES = 10 # matches the INPUT_FEATURES in model.py
+    def __init__(self, dataset_csv_path, tokenizer_name=None, label_list=None):
+        super().__init__()
+        self.data = pd.read_csv(dataset_csv_path)
 
-  # dataset_csv_path: represents the path to where we can access our dataset
-  # tokenizer_name: placeholder for a tokenizer name
-  # label_list: list of the all the 41 unique diseases/labels
-  # max_length: normally the max tokenized sequence length
-  def __init__(self, dataset_csv_path, tokenizer_name, label_list, max_length):
-    super().__init__()
-    # Use a fixed data size for the synthetic data
-    self.data_size = 10000 # the number of samples (one patient/feature vector)
-    self.num_labels = len(label_list) # the number of lables/diseases
-  
-  def __len__(self):
-    return self.data_size #c number of samples in the dataset
+        # Clean columns and disease strings
+        self.data.columns = [col.strip() for col in self.data.columns]
+        self.data["Disease"] = (
+            self.data["Disease"]
+            .astype(str)
+            .str.strip()
+            .str.lower()
+            .str.replace(r"[^a-z0-9\s]", "", regex=True)
+        )
 
-  def __getitem__(self, index): # we generate the features vector (size 10) and the one hot labels vector (size 41) corresponding to the correct disease
-    # ----- GENERATING SAMPLE -----
-    # Determine the index of the correct disease label for this sample which will be evaluated against the guessed label
-    true_label_index = index % self.num_labels # makes each sample correspond to one label index
-    
-    # creates a tensor of 10 float features (input vector), initialized to 0
-    features = torch.zeros(self.NUM_FEATURES, dtype=torch.float)
-    # defining the maximum index of the label_list
-    max_index = self.num_labels - 1 
-    # assigning each feature/row to a specific disease number (the first value fo the feature vector)
-    features[0] = float(true_label_index) / max_index
-    
-    # Fill the rest of the features with random noise
-    features[1:] = 0.01 * torch.randn(self.NUM_FEATURES - 1)
-    
-    # Create the labels (one-hot vector for multi-label classification)
-    labels = torch.zeros(self.num_labels, dtype=torch.float)
-    labels[true_label_index] = 1.0 # sets the correct disease label to 1.0
+        # Build label list (diseases)
+        if label_list is None:
+            self.label_list = sorted(self.data["Disease"].unique())
+        else:
+            self.label_list = label_list
+        self.num_labels = len(self.label_list)
+        self.label_to_index = {label: i for i, label in enumerate(self.label_list)}
 
-    return {
-      'features': features, 
-      'labels': labels
-    }
+        # Build symptom vocab
+        symptom_cols = [c for c in self.data.columns if c.lower() != "disease"]
+        raw = self.data[symptom_cols].values.ravel()
+        unique_syms = [s for s in raw if isinstance(s, str) and s.strip() != ""]
+        self.symptom_vocab = sorted(set(s.strip() for s in unique_syms))
+        self.num_features = len(self.symptom_vocab)
+        self.symptom_to_index = {s: i for i, s in enumerate(self.symptom_vocab)}
+
+        print(f"Loaded {len(self.data)} samples")
+        print(f"Detected {self.num_features} unique symptoms")
+        print(f"Detected {self.num_labels} unique diseases")
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        row = self.data.iloc[idx]
+        disease_name = row["Disease"]
+
+        # Build features
+        features = torch.zeros(self.num_features, dtype=torch.float)
+        for col in self.data.columns:
+            if col.lower() == "disease":
+                continue
+            val = row[col]
+            if isinstance(val, str):
+                val = val.strip()
+            if isinstance(val, str) and val in self.symptom_to_index:
+                features[self.symptom_to_index[val]] = 1.0
+
+        # Build labels (one-hot)
+        labels = torch.zeros(self.num_labels, dtype=torch.float)
+        if disease_name in self.label_to_index:
+            labels[self.label_to_index[disease_name]] = 1.0
+
+        return {"features": features, "labels": labels}
