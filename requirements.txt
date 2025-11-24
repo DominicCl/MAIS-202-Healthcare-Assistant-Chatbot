@@ -21,3 +21,5 @@ protobuf
 # ---- Optional but recommended for stability ----
 regex
 requests
+
+gunicorn
