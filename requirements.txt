@@ -1,0 +1,23 @@
+# ---- Web Framework ----
+flask
+flask-cors
+
+# ---- Machine Learning ----
+torch
+numpy
+pandas
+scikit-learn
+
+# ---- NLP / Embedding Model ----
+sentence-transformers
+
+# ---- Utilities ----
+joblib
+tqdm
+
+# ---- For safety when loading models ----
+protobuf
+
+# ---- Optional but recommended for stability ----
+regex
+requests
