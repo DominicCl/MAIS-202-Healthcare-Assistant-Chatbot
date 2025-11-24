@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Healthcare Assistant Chatbot</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="layout">
+    <header class="hero">
+      <p class="eyebrow">Healthcare Assistant</p>
+      <h1>Describe your symptoms and let the model respond.</h1>
+      <p class="subhead">
+        Enter anything you're experiencing (e.g., fever, cough, fatigue) and press
+        <strong>Send to Chatbot</strong>. The latest prediction will appear below.
+      </p>
+    </header>
+
+    <section class="card">
+      <label for="symptomInput" class="label">Describe your symptoms</label>
+      <textarea
+        id="symptomInput"
+        class="textarea"
+        placeholder="Example: I've had a persistent cough with high fever and headaches"
+        rows="7"
+      ></textarea>
+
+      <div class="actions">
+        <button id="sendBtn" class="btn primary">Send to Chatbot</button>
+        <button id="resetBtn" class="btn subtle">Reset</button>
+      </div>
+
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="card output">
+      <div class="output-header">
+        <h2>Model Output</h2>
+        <span class="chip" id="apiIndicator">API: same origin</span>
+      </div>
+      <pre id="modelOutput" class="output-body">The model response will appear here.</pre>
+    </section>
+
+    <footer class="footer">
+      <p>
+        Tip: host this folder with the Flask API (default) or pass a custom base URL using
+        <code>?api=https://your-domain.com</code> in the address bar.
+      </p>
+    </footer>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>

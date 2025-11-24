@@ -1,140 +1,221 @@
+
+#Full Neural Network Training Pipeline
+# Works with: dataset_loader.py (returns 8 values)
+
 import time
+from pathlib import Path
+import numpy as np
 import torch
-from torch.utils.data import DataLoader
 import torch.nn as nn
-from torch.optim import Adam
-import pandas as pd
+from torch.utils.data import DataLoader, TensorDataset
 
-from dataset import MultiLabelTextDataset
-from model import MultiLabelClassificationModel
-from metrics import MetricsEvaluator
-
-
-# CONFIG
-
-CSV_TRAIN = "../data/train.csv"
-CSV_VAL = "../data/val.csv"
-MODEL_NAME = "MLC-FastTrainer"
-BATCH_SIZE = 64
-LR = 0.0025
-EPOCHS = 100
-DROPOUT = 0.10
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-THRESHOLD = 0.40  # threshold for multilabel classification
+from dataset_loader import load_dataset
 
 
 
-# DATA LOADER HELPER
+# 1. Model Definition work with 1–3 hidden layers
+class SymptomNetV2(nn.Module):
+    def __init__(self, num_features, num_classes,
+                 hidden1=256, hidden2=128, dropout=0.3):
+        super().__init__()
 
-def make_loader(csv_path, label_list=None, symptom_vocab=None, batch_size=64, shuffle=False):
-    ds = MultiLabelTextDataset(csv_path, tokenizer_name=MODEL_NAME, label_list=label_list)
+        self.model = nn.Sequential(
+            nn.Linear(num_features, hidden1),
+            nn.ReLU(),
+            nn.Dropout(dropout),
 
-    # Force consistent symptom vocab between train and val
-    if symptom_vocab is not None:
-        ds.symptom_vocab = symptom_vocab
-        ds.num_features = len(symptom_vocab)
-        ds.symptom_to_index = {s: i for i, s in enumerate(symptom_vocab)}
+            nn.Linear(hidden1, hidden2),
+            nn.ReLU(),
+            nn.Dropout(dropout),
 
-    dl = DataLoader(ds, batch_size=batch_size, shuffle=shuffle)
-    return ds, dl
+            nn.Linear(hidden2, num_classes)
+        )
+
+    def forward(self, x):
+        return self.model(x)
 
 
 
-# MAIN TRAINING LOOP
+# 2. Train One Model
+def train_one_model(X_train, y_train, X_val, y_val,
+                    num_features, num_classes,
+                    hidden1, hidden2,
+                    lr, dropout, weight_decay,
+                    device):
 
-def main():
-    t0 = time.time()
+    model = SymptomNetV2(
+        num_features=num_features,
+        num_classes=num_classes,
+        hidden1=hidden1,
+        hidden2=hidden2,
+        dropout=dropout,
+    ).to(device)
 
-    # Load training data (defines labels + vocab)
-    train_ds, train_loader = make_loader(CSV_TRAIN, label_list=None, batch_size=BATCH_SIZE, shuffle=True)
+    optimizer = torch.optim.Adam(model.parameters(),
+                                 lr=lr,
+                                 weight_decay=weight_decay)
+    criterion = nn.CrossEntropyLoss()
 
-    # Load validation data (same label list + same vocab)
-    val_ds, val_loader = make_loader(
-        CSV_VAL,
-        label_list=train_ds.label_list,
-        symptom_vocab=train_ds.symptom_vocab,
-        batch_size=32,
-        shuffle=False,
-    )
+    # Convert to TensorLoader
+    train_ds = TensorDataset(torch.tensor(X_train.values, dtype=torch.float32),
+                             torch.tensor(y_train, dtype=torch.long))
+    val_ds = TensorDataset(torch.tensor(X_val.values, dtype=torch.float32),
+                           torch.tensor(y_val, dtype=torch.long))
 
-    num_labels = len(train_ds.label_list)
-    num_features = train_ds.num_features
+    train_dl = DataLoader(train_ds, batch_size=64, shuffle=True)
+    val_dl = DataLoader(val_ds, batch_size=64)
 
-    print(f"\n Diseases: {num_labels} |  Features: {num_features}")
+    # Early stopping parameters cuz if not takes too long
+    best_val_loss = float("inf")
+    patience = 8
+    patience_counter = 0
 
-    #  Model
-    model = MultiLabelClassificationModel(
-        encoder_name=MODEL_NAME,
-        num_labels=num_labels,
-        input_features=num_features,
-        dropout=DROPOUT
-    ).to(DEVICE)
+    EPOCHS = 50
 
-    # Class weights (inverse frequency)
-    counts = pd.read_csv(CSV_TRAIN)["Disease"].value_counts()
-    class_weights = [1.0 / (counts.get(lbl, 1) / counts.sum()) for lbl in train_ds.label_list]
-    pos_weight = torch.tensor(class_weights, dtype=torch.float, device=DEVICE)
-
-    loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-    opt = Adam(model.parameters(), lr=LR)
-    evaluator = MetricsEvaluator(DEVICE)
-
-    print("\n Training...")
     for epoch in range(EPOCHS):
         model.train()
-        total_loss = 0.0
+        train_losses = []
 
-        for step, batch in enumerate(train_loader):
-            x = batch["features"].to(DEVICE)
-            y = batch["labels"].to(DEVICE)
+        for xb, yb in train_dl:
+            xb, yb = xb.to(device), yb.to(device)
 
-            opt.zero_grad()
-            logits = model(x)
-            loss = loss_fn(logits, y)
+            optimizer.zero_grad()
+            logits = model(xb)
+            loss = criterion(logits, yb)
             loss.backward()
-            opt.step()
-            total_loss += loss.item()
+            optimizer.step()
+            train_losses.append(loss.item())
 
-            if step == 0:
-                print(f"  Epoch {epoch+1}/{EPOCHS} | Step {step+1}/{len(train_loader)} | Loss: {loss.item():.4f}")
+        # Validation
+        model.eval()
+        val_losses = []
+        correct = 0
+        total = 0
 
-        avg_loss = total_loss / max(1, len(train_loader))
+        with torch.no_grad():
+            for xb, yb in val_dl:
+                xb, yb = xb.to(device), yb.to(device)
+                logits = model(xb)
+                loss = criterion(logits, yb)
 
-        #  Evaluate on validation set
-        val_acc, val_prec, val_rec, val_f1 = evaluator.evaluate(
-            model, val_loader, threshold=THRESHOLD, debug=(epoch == 0)
-        )
-        print(f"[Epoch {epoch+1}] Train Loss: {avg_loss:.4f} | "
-              f"Val_Acc: {val_acc:.4f} | Val_Prec: {val_prec:.4f} | "
-              f"Val_Rec: {val_rec:.4f} | Val_F1: {val_f1:.4f}")
+                val_losses.append(loss.item())
 
-      
+                preds = logits.argmax(dim=1)
+                correct += (preds == yb).sum().item()
+                total += len(yb)
 
-    #  Save final model
-    torch.save(model.state_dict(), "disease_predictor_final.pt")
-    print(f"\n Done in {(time.time() - t0)/60:.2f} min | Saved 'disease_predictor_final.pt'.")
-    patience = 10
-    best_f1 = 0
-    epochs_no_improve = 0
+        val_loss = np.mean(val_losses)
+        val_acc = correct / total
 
-    for epoch in range(EPOCHS):
-        train_loss = train(...)
-        val_acc, val_prec, val_rec, val_f1 = evaluate(...)
-    
-        if val_f1 > best_f1:
-            best_f1 = val_f1
-            epochs_no_improve = 0
-            torch.save(model.state_dict(), "best_model.pt")
+        print(f"Epoch {epoch+1:02d}: "
+              f"Train Loss={np.mean(train_losses):.4f} | "
+              f"Val Loss={val_loss:.4f} | "
+              f"Val Acc={val_acc:.4f}")
+
+        # Early stopping logic
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_model_state = model.state_dict()
+            patience_counter = 0
         else:
-            epochs_no_improve += 1
-    
-        if epochs_no_improve >= patience:
-            print(f"⏹ Early stopping at epoch {epoch}")
-            break
+            patience_counter += 1
+            if patience_counter >= patience:
+                print("Early stopping triggered!")
+                break
+
+    # return best model
+    return best_model_state, val_acc, best_val_loss
 
 
 
+# 3. search for best Hyperparameter 
+def hyperparameter_search(csv_path, output_path, max_seconds=1800):
+    start_time = time.time()
 
+    print("Loading dataset")
+    (
+        X_train,
+        X_val,
+        X_test,
+        y_train,
+        y_val,
+        y_test,
+        label_encoder,
+        symptom_cols
+    ) = load_dataset(csv_path)
+
+    num_features = len(symptom_cols)
+    num_classes = len(label_encoder.classes_)
+    print(f"Detected {num_features} symptoms and {num_classes} diseases.")
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+
+    # hyperparameter search space
+    hidden_sizes = [(512, 256), (256, 128), (128, 64)]
+    lrs = [1e-3, 5e-4]
+    dropouts = [0.2, 0.3]
+    weight_decays = [1e-4, 1e-5]
+
+    best_overall = None
+
+    for h1, h2 in hidden_sizes:
+        for lr in lrs:
+            for dp in dropouts:
+                for wd in weight_decays:
+
+                    if time.time() - start_time > max_seconds:
+                        print("⏳ Time limit reached, stopping search.")
+                        break
+
+                    print("\n====================================")
+                    print(f"Testing config: h1={h1}, h2={h2}, lr={lr}, dropout={dp}, wd={wd}")
+                    print("====================================")
+
+                    model_state, val_acc, val_loss = train_one_model(
+                        X_train, y_train,
+                        X_val, y_val,
+                        num_features, num_classes,
+                        hidden1=h1,
+                        hidden2=h2,
+                        lr=lr,
+                        dropout=dp,
+                        weight_decay=wd,
+                        device=device,
+                    )
+
+                    if (best_overall is None) or (val_acc > best_overall["acc"]):
+                        best_overall = {
+                            "state": model_state,
+                            "acc": val_acc,
+                            "loss": val_loss,
+                            "params": (h1, h2, lr, dp, wd),
+                        }
+                        print(f" New best model! Val Acc={val_acc:.4f}")
+
+    print("\n BEST MODEL FOUND")
+    print(best_overall)
+
+    # Save final model bundle
+    torch.save({
+        "model_state_dict": best_overall["state"],
+        "num_features": num_features,
+        "num_classes": num_classes,
+        "symptom_cols": symptom_cols,
+        "label_classes": label_encoder.classes_
+    }, output_path)
+
+    print(f"\nSaved best model to {output_path}")
+
+
+
+# 4. MAIN ENTRY POINT
 if __name__ == "__main__":
-    main()
+    csv_path = "../data/synthetic_medical_dataset.csv"
+    output_path = "../data/best_nn_model.pt"
 
+    hyperparameter_search(
+        csv_path=csv_path,
+        output_path=output_path,
+        max_seconds=1800  # 30-minute limit
+    )

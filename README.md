@@ -1,1 +1,0 @@
-# MAIS-202-Healthcare-Assistant-Chatbot
