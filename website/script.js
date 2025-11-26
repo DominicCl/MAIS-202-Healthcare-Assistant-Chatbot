@@ -43,6 +43,8 @@
       }
 
       const data = await response.json();
+      renderOutput(data);
+
       const reply =
  	 "Detected symptoms:\n" +
   	(data.symptoms.join(", ") || "None") +
@@ -51,7 +53,54 @@
     	.map(p => `${p.disease} — ${(p.probability * 100).toFixed(1)}%`)
     	.join("\n");
 
-      modelOutput.textContent = reply;
+      function renderOutput(data) {
+  const output = document.getElementById("modelOutput");
+  output.innerHTML = "";
+
+  // Symptoms section
+  if (data.symptoms && data.symptoms.length > 0) {
+    const symBox = document.createElement("div");
+    symBox.innerHTML = `<h3>Detected Symptoms</h3>`;
+    const symList = document.createElement("div");
+    symList.className = "tag-list";
+
+    data.symptoms.forEach(sym => {
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = sym.replace(/_/g, " ");
+      symList.appendChild(tag);
+    });
+
+    symBox.appendChild(symList);
+    output.appendChild(symBox);
+  }
+
+  // Predictions section
+  if (data.predictions && data.predictions.length > 0) {
+    const predBox = document.createElement("div");
+    predBox.innerHTML = `<h3>Predictions</h3>`;
+
+    data.predictions.forEach(pred => {
+      const row = document.createElement("div");
+      row.className = "prediction-row";
+
+      const probPercent = Math.round(pred.probability * 100);
+
+      row.innerHTML = `
+        <div class="pred-label">${pred.disease.replace(/_/g, " ")}</div>
+        <div class="pred-bar">
+          <div class="pred-bar-fill" style="width:${probPercent}%;"></div>
+        </div>
+        <div class="pred-value">${probPercent}%</div>
+      `;
+
+      predBox.appendChild(row);
+    });
+
+    output.appendChild(predBox);
+  }
+}
+
       textarea.value = "";
       setStatus("Response received.", "ok");
     } catch (err) {
