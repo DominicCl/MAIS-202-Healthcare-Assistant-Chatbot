@@ -51,7 +51,16 @@ CUSTOM_SYNONYMS = {
     "sweating": ["sweaty", "cold sweat", "sweating a lot"],
     "headache": ["head pain", "pounding head", "migraine", "throbbing head"],
     "phonophobia": ["Discomfort from loud sounds","sensitivity to sounds"],
-    "photophobia": ["Light sensitivity", "Sensitivity to light", "Painful reaction to light"],
+    "photophobia": [
+    "sensitivity to light",
+    "sensitive to light",
+    "light hurts",
+    "bright light hurts",
+    "light pain",
+    "sunlight hurts",
+    "light makes it worse",
+    "light bothers my eyes"],
+
 
     # Respiratory
     "cough": ["coughing", "dry cough", "wet cough"],
