@@ -120,19 +120,37 @@ def literal_and_fuzzy_match(text_norm: str, symptom_vocab):
 # --------------------------------------------------------
 def custom_synonym_match(text_norm: str, symptom_vocab):
     """
-     to map natural phrases to  canonical symptom names
-    Only matches phrases that actually appear in text_norm
+    - exact match
+    - fuzzy (0.75+)
+    - allows synonyms with different wording
+    - avoids false positives
     """
     detected = set()
 
-    for symptom in symptom_vocab:
-        if symptom not in CUSTOM_SYNONYMS:
-            continue
+    for symptom, syn_list in CUSTOM_SYNONYMS.items():
+        for phrase in syn_list:
 
-        for phrase in CUSTOM_SYNONYMS[symptom]:
-            if phrase in text_norm:
+            # Normalize synonym too
+            p_norm = normalize(phrase)
+
+            # Exact substring
+            if p_norm in text_norm:
                 detected.add(symptom)
-                break
+                continue
+
+            # Fuzzy match
+            if difflib.SequenceMatcher(None, p_norm, text_norm).ratio() > 0.75:
+                detected.add(symptom)
+                continue
+
+            # Semantic similarity using MiniLM
+            sim = util.cos_sim(
+                MODEL.encode(p_norm),
+                MODEL.encode(text_norm)
+            ).item()
+
+            if sim > 0.55:
+                detected.add(symptom)
 
     return detected
 
