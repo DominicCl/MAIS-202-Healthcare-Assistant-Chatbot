@@ -50,6 +50,8 @@ CUSTOM_SYNONYMS = {
     "chills": ["shivering", "cold sweats"],
     "sweating": ["sweaty", "cold sweat", "sweating a lot"],
     "headache": ["head pain", "pounding head", "migraine", "throbbing head"],
+    "phonophobia": ["Discomfort from loud sounds","sensitivity to sounds"],
+    "photophobia": ["Light sensitivity", "Sensitivity to light", "Painful reaction to light"],
 
     # Respiratory
     "cough": ["coughing", "dry cough", "wet cough"],
