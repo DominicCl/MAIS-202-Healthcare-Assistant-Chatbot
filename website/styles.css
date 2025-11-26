@@ -183,3 +183,61 @@ code {
   padding: 0.1rem 0.35rem;
   border-radius: 0.4rem;
 }
+
+.pretty-output h3 {
+  margin-top: 0;
+  color: var(--primary-dark);
+  font-size: 1.1rem;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.tag {
+  background: #e0e7ff;
+  color: #3730a3;
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.prediction-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr 3rem;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+}
+
+.pred-label {
+  font-weight: 600;
+  color: var(--text);
+  text-transform: capitalize;
+}
+
+.pred-bar {
+  background: var(--subtle);
+  border-radius: 8px;
+  overflow: hidden;
+  height: 10px;
+}
+
+.pred-bar-fill {
+  height: 100%;
+  background: var(--primary);
+  transition: width 0.3s ease;
+}
+
+.pred-value {
+  font-weight: 600;
+  color: var(--primary-dark);
+}
+
+.placeholder {
+  color: var(--muted);
+}
+
